@@ -1,21 +1,30 @@
 import { UserLoginDto } from './../users/dto/create-user.dto';
-import { Body, Controller, Get, Post, Request, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Request,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { CreateUserDto } from 'src/users/dto/create-user.dto';
 import { AuthGuard } from '@nestjs/passport';
+import { ResetPasswordDto } from './dto/auth-user.dto';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @UseGuards(AuthGuard("jwt"))
-  @Get("profile")
+  @UseGuards(AuthGuard('jwt'))
+  @Get('profile')
   getMe(@Request() req) {
-    const user = req.user
+    const user = req.user;
     return {
       id: user.id,
       email: user.email,
-    }
+    };
   }
 
   @Post('registration')
@@ -25,18 +34,38 @@ export class AuthController {
 
   @Post('login')
   async login(@Res({ passthrough: true }) res, @Body() dto: UserLoginDto) {
-    const { token } = await this.authService.login(dto);
+    const { token, user } = await this.authService.login(dto);
     res.cookie('token', token, {
       httpOnly: true,
       sameSite: 'strict',
       secure: false,
     });
-    return { message: 'Logged success!' };
+    return { message: 'Logged success!', user };
   }
 
-  @Post("logout")
-  logout(@Res({passthrough: true}) res) {
-    res.clearCookie("token")
-    return {message: "Logged out"}
+  @Post('logout')
+  logout(@Res({ passthrough: true }) res) {
+    res.clearCookie('token');
+    return { message: 'Logged out' };
+  }
+
+  @Post('verify-email')
+  async verifyEmail(@Body('token') token: string) {
+    return this.authService.verifyEmail(token);
+  }
+
+  @Post('resend-verification')
+  async resendVerif(@Body('email') email: string) {
+    return this.authService.resendVerif(email);
+  }
+
+  @Post('forgot-password')
+  async forgotPass(@Body('email') email: string) {
+    return this.authService.forgotPass(email);
+  }
+
+  @Post('reset-password')
+  async resetPass(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPass(dto);
   }
 }

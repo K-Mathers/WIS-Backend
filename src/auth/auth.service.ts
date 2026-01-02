@@ -4,13 +4,14 @@ import { CreateUserDto, UserLoginDto } from 'src/users/dto/create-user.dto';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { JwtService } from '@nestjs/jwt';
-import { ResetPasswordDto } from './dto/auth-user.dto';
+import { MailService } from 'src/mail/mail.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
+    private mailService: MailService,
   ) {}
 
   async registration(userDto: CreateUserDto) {
@@ -30,23 +31,11 @@ export class AuthService {
 
     const hashPassword = await bcrypt.hash(password, 10);
 
-    const verificationToken = crypto.randomBytes(32).toString('hex');
-    const tokenHash = crypto
-      .createHash('sha256')
-      .update(verificationToken)
-      .digest('hex');
-
     const user = await this.prisma.user.create({
       data: {
         email,
         password: hashPassword,
         isVerified: false,
-        verificationTokens: {
-          create: {
-            tokenHash,
-            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // post
-          },
-        },
       },
     });
 
@@ -54,7 +43,6 @@ export class AuthService {
       message: 'User register success',
       userId: user.id,
       isVerified: user.isVerified,
-      verificationToken, // post
     };
   }
 
@@ -66,8 +54,8 @@ export class AuthService {
 
     const isPassword = await bcrypt.compare(password, findUser.password);
     if (!isPassword) throw new BadRequestException('Invalid password');
-    if (!findUser.isVerified)
-      throw new BadRequestException('Email not verified');
+    // if (!findUser.isVerified)
+    //   throw new BadRequestException('Email not verified');
 
     const payload = { email: findUser.email, sub: findUser.id };
     const token = this.jwtService.sign(payload);
@@ -87,136 +75,102 @@ export class AuthService {
     return this.jwtService.sign(payload);
   }
 
-  async verifyEmail(token: string) {
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    const verifToken = await this.prisma.verificationToken.findUnique({
-      where: { tokenHash },
-    });
-
-    if (!verifToken) {
-      throw new BadRequestException('Invalid token');
-    }
-
-    if (verifToken.expiresAt < new Date()) {
-      throw new BadRequestException('Token is expried');
-    }
-
-    const user = await this.prisma.user.update({
-      where: {
-        id: verifToken.userId,
-      },
-      data: {
-        isVerified: true,
-      },
-    });
-
-    await this.prisma.verificationToken.delete({
-      where: { id: verifToken.id },
-    });
-
-    return {
-      message: 'Email verified',
-      email: user.email,
-    };
-  }
-
-  async resendVerif(email: string) {
-    const findUser = await this.prisma.user.findUnique({ where: { email } });
-    if (!findUser) throw new BadRequestException('User not found');
-    if (findUser.isVerified)
-      throw new BadRequestException("Email already verified'");
-
-    await this.prisma.verificationToken.deleteMany({
-      where: { userId: findUser.id },
-    });
-
-    const verificationToken = crypto.randomBytes(32).toString('hex');
-    const tokenHash = crypto
-      .createHash('sha256')
-      .update(verificationToken)
-      .digest('hex');
-
-    await this.prisma.verificationToken.create({
-      data: {
-        userId: findUser.id,
-        tokenHash,
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-      },
-    });
-    return {
-      message: 'Verif email resent',
-      email: findUser.email,
-      verificationToken,
-    };
-  }
-
   async forgotPass(email: string) {
     const findUser = await this.prisma.user.findUnique({ where: { email } });
     if (!findUser) throw new BadRequestException('User not found');
-    if (!findUser.isVerified)
-      throw new BadRequestException("Email already verified'");
+    // if (!findUser.isVerified)
+    //   throw new BadRequestException('Email not verified');
 
-    await this.prisma.verificationToken.deleteMany({
-      where: { userId: findUser.id },
-    });
-
-    const verificationToken = crypto.randomBytes(32).toString('hex');
-    const tokenHash = crypto
-      .createHash('sha256')
-      .update(verificationToken)
-      .digest('hex');
-
-    await this.prisma.passwordResetToken.create({
-      data: {
-        userId: findUser.id,
-        tokenHash,
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-      },
-    });
-    return {
-      message: 'Forgot password',
-      email: findUser.email,
-      verificationToken,
-    };
+    return this.sendEmailCode(email, 'RESET_PASSWORD');
   }
 
-  async resetPass(resetPassDto: ResetPasswordDto) {
-    const { token, newPassword, confirmPassword } = resetPassDto;
-
+  async resetPass(
+    email: string,
+    code: string,
+    newPassword: string,
+    confirmPassword: string,
+  ) {
     if (newPassword !== confirmPassword)
-      throw new BadRequestException("Password don't exist");
+      throw new BadRequestException('Passwords do not match');
 
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    await this.verifyEmailCode(email, code, 'RESET_PASSWORD');
 
-    const resetToken = await this.prisma.passwordResetToken.findUnique({
-      where: { tokenHash },
-    });
-
-    if (!resetToken) {
-      throw new BadRequestException('Invalid reset token');
-    }
-
-    if (resetToken.used) {
-      throw new BadRequestException('Token already used');
-    }
-
-    if (resetToken.expiresAt < new Date()) {
-      throw new BadRequestException('Token expired');
-    }
-
-    const hashedPassword = await bcrypt.hash(newPassword, 8);
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
     await this.prisma.user.update({
-      where: { id: resetToken.userId },
+      where: { email },
       data: { password: hashedPassword },
     });
 
-    await this.prisma.passwordResetToken.update({
-      where: { id: resetToken.id },
+    return { message: 'Password updated' };
+  }
+
+  async sendEmailCode(
+    email: string,
+    EmailCodeProps: 'VERIFY_EMAIL' | 'RESET_PASSWORD',
+  ) {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) throw new BadRequestException('User not found');
+
+    if (EmailCodeProps === 'VERIFY_EMAIL' && user.isVerified) {
+      throw new BadRequestException('Email already verified');
+    }
+
+    await this.prisma.emailCode.deleteMany({
+      where: { userId: user.id, EmailCodeProps },
+    });
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const codeHash = crypto.createHash('sha256').update(code).digest('hex');
+
+    await this.prisma.emailCode.create({
+      data: {
+        userId: user.id,
+        codeHash,
+        EmailCodeProps,
+        expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+      },
+    });
+
+    await this.mailService.sendVerificationCode(email, code);
+
+    return { message: 'Code sent' };
+  }
+
+  async verifyEmailCode(
+    email: string,
+    code: string,
+    EmailCodeProps: 'VERIFY_EMAIL' | 'RESET_PASSWORD',
+  ) {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) throw new BadRequestException('User not found');
+
+    const codeHash = crypto.createHash('sha256').update(code).digest('hex');
+
+    const emailCode = await this.prisma.emailCode.findFirst({
+      where: {
+        userId: user.id,
+        codeHash,
+        EmailCodeProps,
+        used: false,
+      },
+    });
+
+    if (!emailCode) throw new BadRequestException('Invalid code');
+    if (emailCode.expiresAt < new Date())
+      throw new BadRequestException('Code expired');
+
+    if (EmailCodeProps === 'VERIFY_EMAIL') {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { isVerified: true },
+      });
+    }
+
+    await this.prisma.emailCode.update({
+      where: { id: emailCode.id },
       data: { used: true },
     });
 
-    return {
-      message: 'Password successful changed!',
-    };
+    return { message: 'Code verified' };
   }
 }

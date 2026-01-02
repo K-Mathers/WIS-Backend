@@ -15,7 +15,7 @@ import { ResetPasswordDto } from './dto/auth-user.dto';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   @UseGuards(AuthGuard('jwt'))
   @Get('profile')
@@ -49,16 +49,6 @@ export class AuthController {
     return { message: 'Logged out' };
   }
 
-  @Post('verify-email')
-  async verifyEmail(@Body('token') token: string) {
-    return this.authService.verifyEmail(token);
-  }
-
-  @Post('resend-verification')
-  async resendVerif(@Body('email') email: string) {
-    return this.authService.resendVerif(email);
-  }
-
   @Post('forgot-password')
   async forgotPass(@Body('email') email: string) {
     return this.authService.forgotPass(email);
@@ -66,6 +56,21 @@ export class AuthController {
 
   @Post('reset-password')
   async resetPass(@Body() dto: ResetPasswordDto) {
-    return this.authService.resetPass(dto);
+    return this.authService.resetPass(
+      dto.email,
+      dto.code,
+      dto.newPassword,
+      dto.confirmPassword,
+    );
+  }
+
+  @Post('send-code')
+  async sendCode(@Body('email') email: string) {
+    return this.authService.sendEmailCode(email, 'VERIFY_EMAIL');
+  }
+
+  @Post('verify-code')
+  async verifyCode(@Body('email') email: string, @Body('code') code: string) {
+    return this.authService.verifyEmailCode(email, code, 'VERIFY_EMAIL');
   }
 }

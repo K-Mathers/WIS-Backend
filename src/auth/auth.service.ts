@@ -54,8 +54,6 @@ export class AuthService {
 
     const isPassword = await bcrypt.compare(password, findUser.password);
     if (!isPassword) throw new BadRequestException('Invalid password');
-    // if (!findUser.isVerified)
-    //   throw new BadRequestException('Email not verified');
 
     const payload = { email: findUser.email, sub: findUser.id };
     const token = this.jwtService.sign(payload);
@@ -78,8 +76,6 @@ export class AuthService {
   async forgotPass(email: string) {
     const findUser = await this.prisma.user.findUnique({ where: { email } });
     if (!findUser) throw new BadRequestException('User not found');
-    // if (!findUser.isVerified)
-    //   throw new BadRequestException('Email not verified');
 
     return this.sendEmailCode(email, 'RESET_PASSWORD');
   }

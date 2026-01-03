@@ -17,6 +17,16 @@ enum EmailCodeProps {
   RESET_PASSWORD
 }
 
+enum ChatRole {
+  USER
+  ASSISTANT
+}
+
+enum ChatMode {
+  CREATIVE     
+  BALANCED   
+  STRICT     
+}
 
 model User {
   id                 String              @id @default(uuid())
@@ -27,6 +37,7 @@ model User {
   createdAt          DateTime            @default(now())
   passwordResetTokens PasswordResetToken[]
   emailCodes          EmailCode[]
+  chatSession         ChatSession[]
 }
 
 model PasswordResetToken {
@@ -47,4 +58,23 @@ model EmailCode {
   expiresAt DateTime
   used      Boolean  @default(false)
   @@index([userId])
+}
+
+model ChatMessage {
+  id        String   @id @default(uuid())
+  sessionId String
+  session   ChatSession @relation(fields: [sessionId], references: [id])
+  role      ChatRole
+  content   String
+  createdAt DateTime @default(now())
+}
+
+
+model ChatSession {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  mode      ChatMode
+  createdAt DateTime @default(now())
+  messages  ChatMessage[]
 }

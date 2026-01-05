@@ -1,7 +1,8 @@
-import { Controller, Post, Body, UseGuards, Request } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Request, Get } from '@nestjs/common';
 import { AiService } from './ai.service';
 import { AuthGuard } from '@nestjs/passport';
 import { createSessionDto } from './dto/create-session.dto';
+import { sendMessageAi } from './dto/send-message.dto';
 
 @Controller('ai')
 @UseGuards(AuthGuard('jwt'))
@@ -14,12 +15,12 @@ export class AiController {
   }
 
   @Post('message')
-  sentMessage(
-    @Request() req,
-    @Body('sessionId') sessionId,
-    @Body('userText') userText,
-  ) {
-    const userId = req.user.id;
-    return this.aiService.sendMessage(userId, sessionId, userText);
+  sendMessage(@Request() req, @Body() dto: sendMessageAi) {
+    return this.aiService.sendMessage(req.user.id, dto.sessionId, dto.userText);
+  }
+
+  @Get("sessions")
+  getSessions(@Request() req) {
+    return this.aiService.getSessions(req.user.id)
   }
 }

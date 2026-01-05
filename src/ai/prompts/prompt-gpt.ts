@@ -1,3 +1,6 @@
+import { Injectable } from '@nestjs/common';
+import { ChatMode } from '@prisma/client';
+
 export const sneakerPrompt = `
 You are an AI sneaker assistant.
 
@@ -13,3 +16,18 @@ BEHAVIOR:
 
 You are NOT a general chatbot.
 `;
+
+@Injectable()
+export class PromptGpt {
+  async buildSystemPrompt(mode: ChatMode) {
+    if (mode === ChatMode.STRICT) {
+      return sneakerPrompt + '\nAnswer strictly and totally fact.';
+    }
+
+    if (mode === ChatMode.CREATIVE) {
+      return sneakerPrompt + '\nAnswer creatively and friendly.';
+    }
+
+    return sneakerPrompt;
+  }
+}

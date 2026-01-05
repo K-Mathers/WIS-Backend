@@ -71,6 +71,7 @@ model ChatMessage {
 
 
 model ChatSession {
+  title     String  @default("New chat")
   id        String   @id @default(uuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id])

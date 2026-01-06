@@ -17,6 +17,16 @@ BEHAVIOR:
 You are NOT a general chatbot.
 `;
 
+export const nameChatPrompt = `
+Analyze the user's message and create a concise, 1-3 word title that captures the core topic.
+Rules:
+1. No punctuation (no periods, no quotes).
+2. Use the same language as the user.
+3. Be specific but brief (e.g., "Baking Bread" instead of "How to bake bread at home").
+4. If the message is just a greeting or nonsense, use "General Conversation".
+5. Return ONLY the title text.
+`;
+
 @Injectable()
 export class PromptGpt {
   async buildSystemPrompt(mode: ChatMode) {

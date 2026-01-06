@@ -5,16 +5,15 @@ import {
 } from '@nestjs/common';
 import { ChatMode, ChatRole } from '@prisma/client';
 import { PrismaService } from 'prisma/prisma.service';
-import { PromptGpt } from './prompts/prompt-gpt';
+import { nameChatPrompt, PromptGpt } from './prompts/prompt-gpt';
 import { OpenRouterProvider } from './providers/openrouter.provider';
-
 @Injectable()
 export class AiService {
   constructor(
     private prisma: PrismaService,
     private openRouter: OpenRouterProvider,
     private promptGpt: PromptGpt,
-  ) {}
+  ) { }
 
   async createSession(userId: string, mode: ChatMode) {
     const session = await this.prisma.chatSession.create({
@@ -60,8 +59,16 @@ export class AiService {
 
     if (!session) throw new BadRequestException('Session not found');
     if (session.userId !== userId) throw new ForbiddenException('Forbidden');
-
     await this.saveMessage(sessionId, ChatRole.USER, userText);
+    if (session?.title === 'New chat') {
+      const generatedTitle = await this.openRouter.askAi(nameChatPrompt, [
+        { role: 'user', content: userText },
+      ]);
+      await this.prisma.chatSession.update({
+        where: { id: sessionId },
+        data: { title: generatedTitle.replace(/"/g, '') },
+      });
+    }
     const history = await this.loadHistory(sessionId, 10);
     const aiMessages: { role: 'user' | 'assistant'; content: string }[] =
       history.map((m) => ({
@@ -92,5 +99,51 @@ export class AiService {
     });
 
     return sessions;
+  }
+
+  async getSessionId(userId: string, sessionId: string) {
+    const session = await this.prisma.chatSession.findUnique({
+      where: { id: sessionId },
+      include: {
+        messages: {
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+
+    if (!session) throw new BadRequestException('Session not found');
+    if (session.userId !== userId) throw new ForbiddenException('Forbidden');
+    return session;
+  }
+
+  async deleteSession(userId: string, sessionId: string) {
+    const session = await this.prisma.chatSession.findUnique({
+      where: { id: sessionId },
+    });
+
+    if (!session) throw new BadRequestException('Session not found');
+    if (session.userId !== userId) throw new ForbiddenException('Forbidden');
+
+    await this.prisma.chatSession.delete({
+      where: { id: sessionId },
+    });
+
+    return { message: 'Delete session' };
+  }
+
+  async editSessionName(userId: string, sessionId: string, newTitle: string) {
+    const session = await this.prisma.chatSession.findUnique({
+      where: { id: sessionId },
+    });
+
+    if (!session) throw new BadRequestException('Session not found');
+    if (session.userId !== userId) throw new ForbiddenException('Forbidden');
+
+    await this.prisma.chatSession.update({
+      where: { id: sessionId },
+      data: { title: newTitle },
+    });
+
+    return { message: 'Title updated', title: newTitle };
   }
 }

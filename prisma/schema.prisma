@@ -65,10 +65,10 @@ model ChatMessage {
   sessionId String
   session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   role      ChatRole
-  content   String
+  content   String? 
+  imageUrl  String?    
   createdAt DateTime @default(now())
 }
-
 
 model ChatSession {
   title     String  @default("New chat")

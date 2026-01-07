@@ -7,12 +7,16 @@ export class OpenRouterProvider {
 
   async askAi(
     systemPrompt: string,
-    messages: { role: 'user' | 'assistant'; content: string }[],
+    messages: { role: 'user' | 'assistant'; content: any }[],
+    model?: string
   ): Promise<string> {
+    const defaultModel = process.env.OPENROUTER_MODEL;
+    const selectedModel = model || defaultModel;
+
     const response = await axios.post(
       this.apiUrl,
       {
-        model: process.env.OPENROUTER_MODEL,
+        model: selectedModel,
         messages: [{ role: 'system', content: systemPrompt }, ...messages],
       },
       {

@@ -8,16 +8,20 @@ import {
   Param,
   Delete,
   Patch,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
 import { AiService } from './ai.service';
 import { AuthGuard } from '@nestjs/passport';
 import { createSessionDto } from './dto/create-session.dto';
 import { sendMessageAi } from './dto/send-message.dto';
+import { CloudinaryProvider } from './providers/cloudinary.provider';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @Controller('ai')
 @UseGuards(AuthGuard('jwt'))
 export class AiController {
-  constructor(private readonly aiService: AiService) {}
+  constructor(private readonly aiService: AiService, private readonly cloudinaryProvider: CloudinaryProvider) { }
 
   @Post('session')
   createSession(@Request() req, @Body() dto: createSessionDto) {
@@ -26,7 +30,14 @@ export class AiController {
 
   @Post('message')
   sendMessage(@Request() req, @Body() dto: sendMessageAi) {
-    return this.aiService.sendMessage(req.user.id, dto.sessionId, dto.userText);
+    return this.aiService.sendMessage(req.user.id, dto.sessionId, dto.userText, dto.imageUrl);
+  }
+
+  @Post("upload")
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadImage(@UploadedFile() file: Express.Multer.File) {
+    const url = await this.cloudinaryProvider.uploadFile(file);
+    return { imageUrl: url };
   }
 
   @Get('sessions')

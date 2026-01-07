@@ -13,7 +13,7 @@ export class AiService {
     private prisma: PrismaService,
     private openRouter: OpenRouterProvider,
     private promptGpt: PromptGpt,
-  ) { }
+  ) {}
 
   async createSession(userId: string, mode: ChatMode) {
     const session = await this.prisma.chatSession.create({
@@ -30,12 +30,18 @@ export class AiService {
     };
   }
 
-  async saveMessage(sessionId: string, role: ChatRole, content: string) {
+  async saveMessage(
+    sessionId: string,
+    role: ChatRole,
+    content: string | null,
+    imageUrl?: string,
+  ) {
     return this.prisma.chatMessage.create({
       data: {
         sessionId,
         role,
         content,
+        imageUrl,
       },
     });
   }
@@ -48,9 +54,14 @@ export class AiService {
     });
   }
 
-  async sendMessage(userId: string, sessionId: string, userText: string) {
-    if (!userText || userText.trim().length === 0) {
-      throw new BadRequestException('Message is empty');
+  async sendMessage(
+    userId: string,
+    sessionId: string,
+    userText?: string,
+    imageUrl?: string,
+  ) {
+    if ((!userText || userText.trim().length === 0) && !imageUrl) {
+      throw new BadRequestException('Message must contain text or image');
     }
 
     const session = await this.prisma.chatSession.findUnique({
@@ -59,8 +70,15 @@ export class AiService {
 
     if (!session) throw new BadRequestException('Session not found');
     if (session.userId !== userId) throw new ForbiddenException('Forbidden');
-    await this.saveMessage(sessionId, ChatRole.USER, userText);
-    if (session?.title === 'New chat') {
+
+    await this.saveMessage(
+      sessionId,
+      ChatRole.USER,
+      userText || null,
+      imageUrl,
+    );
+
+    if (session?.title === 'New chat' && userText) {
       const generatedTitle = await this.openRouter.askAi(nameChatPrompt, [
         { role: 'user', content: userText },
       ]);
@@ -70,14 +88,35 @@ export class AiService {
       });
     }
     const history = await this.loadHistory(sessionId, 10);
-    const aiMessages: { role: 'user' | 'assistant'; content: string }[] =
-      history.map((m) => ({
-        role: m.role === ChatRole.USER ? 'user' : 'assistant',
+
+    const aiMessages = history.map((m) => {
+      const role: 'user' | 'assistant' =
+        m.role === ChatRole.USER ? 'user' : 'assistant';
+      if (m.imageUrl) {
+        return {
+          role,
+          content: [
+            { type: 'text', text: m.content || 'Image context' },
+            { type: 'image_url', image_url: { url: m.imageUrl } },
+          ],
+        };
+      }
+      return {
+        role,
         content: m.content,
-      }));
+      };
+    });
+    const needVision = aiMessages.some((m) => Array.isArray(m.content));
+    const modelToUse = needVision
+      ? process.env.OPENROUTER_VISION_MODEL
+      : undefined;
 
     const systemPrompt = await this.promptGpt.buildSystemPrompt(session.mode);
-    const aiResponse = await this.openRouter.askAi(systemPrompt, aiMessages);
+    const aiResponse = await this.openRouter.askAi(
+      systemPrompt,
+      aiMessages,
+      modelToUse,
+    );
     await this.saveMessage(sessionId, ChatRole.ASSISTANT, aiResponse);
 
     return {

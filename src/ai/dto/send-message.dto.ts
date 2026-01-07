@@ -1,9 +1,15 @@
-import { IsString, IsUUID } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class sendMessageAi {
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   sessionId: string;
 
   @IsString()
-  userText: string;
+  @IsOptional()
+  userText?: string;
+
+  @IsString()
+  @IsOptional()
+  imageUrl?: string;
 }

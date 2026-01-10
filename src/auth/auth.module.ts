@@ -12,13 +12,15 @@ import { MailService } from 'src/mail/mail.service';
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, MailService],
   imports: [
-    JwtModule.register({
-      secret: process.env.JWT_SECRET || 'jwt-secret',
-      signOptions: { expiresIn: '1d' },
+    JwtModule.registerAsync({
+      useFactory: async () => ({
+        secret: process.env.JWT_SECRET || 'jwt-secret',
+        signOptions: { expiresIn: '1d' },
+      }),
     }),
     UsersModule,
     PrismaModule,
     MailModule,
   ],
 })
-export class AuthModule {}
+export class AuthModule { }

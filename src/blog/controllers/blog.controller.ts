@@ -1,4 +1,4 @@
-import { Controller, Post, UseGuards, Body, Req } from '@nestjs/common';
+import { Controller, Post, UseGuards, Body, Req, Get } from '@nestjs/common';
 import { BlogService } from '../blog.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { CreateArticleDto } from '../dto/create-article.dto';
@@ -11,5 +11,10 @@ export class BlogController {
   @Post('create')
   createArticle(@Body() dto: CreateArticleDto, @Req() req) {
     return this.blogService.create(req.user.id, dto);
+  }
+
+  @Get("my-articles")
+  getMyArticles(@Req() req) {
+    return this.blogService.getMyArticles(req.user.id);
   }
 }

@@ -13,7 +13,7 @@ export class AiService {
     private prisma: PrismaService,
     private openRouter: OpenRouterProvider,
     private promptGpt: PromptGpt,
-  ) {}
+  ) { }
 
   async createSession(userId: string, mode: ChatMode) {
     const session = await this.prisma.chatSession.create({
@@ -54,12 +54,10 @@ export class AiService {
     });
   }
 
-  async sendMessage(
-    userId: string,
+  async sendMessageStream(userId: string,
     sessionId: string,
     userText?: string,
-    imageUrl?: string,
-  ) {
+    imageUrl?: string,) {
     if ((!userText || userText.trim().length === 0) && !imageUrl) {
       throw new BadRequestException('Message must contain text or image');
     }
@@ -87,11 +85,11 @@ export class AiService {
         data: { title: generatedTitle.replace(/"/g, '') },
       });
     }
+
     const history = await this.loadHistory(sessionId, 10);
 
     const aiMessages = history.map((m) => {
-      const role: 'user' | 'assistant' =
-        m.role === ChatRole.USER ? 'user' : 'assistant';
+      const role = m.role === ChatRole.USER ? 'user' : 'assistant';
       if (m.imageUrl) {
         return {
           role,
@@ -101,28 +99,29 @@ export class AiService {
           ],
         };
       }
-      return {
-        role,
-        content: m.content,
-      };
+      return { role, content: m.content };
     });
-    const needVision = aiMessages.some((m) => Array.isArray(m.content));
-    const modelToUse = needVision
-      ? process.env.OPENROUTER_VISION_MODEL
-      : undefined;
 
     const systemPrompt = await this.promptGpt.buildSystemPrompt(session.mode);
-    const aiResponse = await this.openRouter.askAi(
-      systemPrompt,
-      aiMessages,
-      modelToUse,
-    );
-    await this.saveMessage(sessionId, ChatRole.ASSISTANT, aiResponse);
+    const stream = await this.openRouter.askAiStream(systemPrompt, aiMessages);
 
-    return {
-      answer: aiResponse,
-      history,
-    };
+    const service = this;
+    async function* streamInterceptor() {
+      let fullContent = '';
+      try {
+        for await (const chunk of stream) {
+          const content = chunk.choices[0]?.delta?.content || '';
+          fullContent += content;
+          yield chunk;
+        }
+      } finally {
+        if (fullContent) {
+          await service.saveMessage(sessionId, ChatRole.ASSISTANT, fullContent);
+        }
+      }
+    }
+
+    return streamInterceptor();
   }
 
   async getSessions(userId: string) {

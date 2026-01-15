@@ -1,32 +1,32 @@
 import { Injectable } from '@nestjs/common';
-import axios from 'axios';
+import OpenAi from 'openai';
 
 @Injectable()
 export class OpenRouterProvider {
-  private readonly apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
+  private openai: OpenAi;
 
-  async askAi(
-    systemPrompt: string,
-    messages: { role: 'user' | 'assistant'; content: any }[],
-    model?: string
-  ): Promise<string> {
-    const defaultModel = process.env.OPENROUTER_MODEL;
-    const selectedModel = model || defaultModel;
+  constructor() {
+    this.openai = new OpenAi({
+      baseURL: 'https://openrouter.ai/api/v1/chat/completions',
+      apiKey: process.env.OPENROUTER_API_KEY,
+    });
+  }
 
-    const response = await axios.post(
-      this.apiUrl,
-      {
-        model: selectedModel,
-        messages: [{ role: 'system', content: systemPrompt }, ...messages],
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-      },
-    );
+  async askAiStream(systemPrompt: string, messages: any[], model?: string) {
+    return this.openai.chat.completions.create({
+      model: model || process.env.OPENROUTER_MODEL || 'google/gemini-2.0-flash-exp:free',
+      messages: [{ role: 'system', content: systemPrompt }, ...messages],
+      stream: true,
+    });
+  }
 
-    return response.data.choices[0].message.content;
+  async askAi(systemPrompt: string, messages: any[], model?: string): Promise<string> {
+    const response = await this.openai.chat.completions.create({
+      model: model || process.env.OPENROUTER_MODEL || 'google/gemini-2.0-flash-exp:free',
+      messages: [{ role: 'system', content: systemPrompt }, ...messages],
+      stream: false,
+    });
+
+    return response.choices[0].message.content || '';
   }
 }

@@ -10,6 +10,7 @@ import {
   Patch,
   UseInterceptors,
   UploadedFile,
+  Sse,
 } from '@nestjs/common';
 import { AiService } from './ai.service';
 import { AuthGuard } from '@nestjs/passport';
@@ -19,6 +20,7 @@ import { CloudinaryProvider } from './providers/cloudinary.provider';
 import { FileInterceptor } from '@nestjs/platform-express';
 
 import { ApiTags, ApiOperation, ApiResponse, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import { Observable } from 'rxjs';
 
 @ApiTags('ai')
 @Controller('ai')
@@ -35,9 +37,24 @@ export class AiController {
 
   @ApiOperation({ summary: 'Send message to AI' })
   @ApiResponse({ status: 200, description: 'AI response with history' })
-  @Post('message')
-  sendMessage(@Request() req, @Body() dto: sendMessageAi) {
-    return this.aiService.sendMessage(req.user.id, dto.sessionId, dto.userText, dto.imageUrl);
+  @Sse('message')
+  async sendMessageStream(@Request() req, @Body() dto: sendMessageAi): Promise<Observable<MessageEvent>> {
+    const stream = await this.aiService.sendMessageStream(req.user.id, dto.sessionId, dto.userText, dto.imageUrl)
+    return new Observable((observer) => {
+      (async () => {
+        try {
+          for await (const chunk of stream) {
+            const content = chunk.choices[0]?.delta?.content || '';
+            if (content) {
+              observer.next({ data: { content } } as MessageEvent);
+            }
+          }
+          observer.complete();
+        } catch (e) {
+          observer.error(e);
+        }
+      })();
+    });
   }
 
   @ApiOperation({ summary: 'Upload image for vision analysis' })

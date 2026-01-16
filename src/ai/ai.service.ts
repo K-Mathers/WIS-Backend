@@ -88,22 +88,38 @@ export class AiService {
 
     const history = await this.loadHistory(sessionId, 10);
 
-    const aiMessages = history.map((m) => {
+    const normalizedMessages = history.reduce((acc, m) => {
       const role = m.role === ChatRole.USER ? 'user' : 'assistant';
-      if (m.imageUrl) {
-        return {
-          role,
-          content: [
-            { type: 'text', text: m.content || 'Image context' },
-            { type: 'image_url', image_url: { url: m.imageUrl } },
-          ],
-        };
+      const content = m.content || '';
+      const lastMsg = acc[acc.length - 1];
+
+      if (lastMsg && lastMsg.role === role) {
+        if (typeof lastMsg.content === 'string') {
+          lastMsg.content += `\n\n${content}`;
+        } else if (Array.isArray(lastMsg.content)) {
+          lastMsg.content.push({ type: 'text', text: content });
+        }
+        if (m.imageUrl && Array.isArray(lastMsg.content)) {
+          lastMsg.content.push({ type: 'image_url', image_url: { url: m.imageUrl } });
+        }
+      } else {
+        if (m.imageUrl) {
+          acc.push({
+            role,
+            content: [
+              { type: 'text', text: content || 'Image context' },
+              { type: 'image_url', image_url: { url: m.imageUrl } },
+            ],
+          });
+        } else {
+          acc.push({ role, content });
+        }
       }
-      return { role, content: m.content };
-    });
+      return acc;
+    }, [] as any[]);
 
     const systemPrompt = await this.promptGpt.buildSystemPrompt(session.mode);
-    const stream = await this.openRouter.askAiStream(systemPrompt, aiMessages);
+    const stream = await this.openRouter.askAiStream(systemPrompt, normalizedMessages);
 
     const service = this;
     async function* streamInterceptor() {

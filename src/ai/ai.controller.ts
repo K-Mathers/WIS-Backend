@@ -10,7 +10,7 @@ import {
   Patch,
   UseInterceptors,
   UploadedFile,
-  Sse,
+  Res,
 } from '@nestjs/common';
 import { AiService } from './ai.service';
 import { AuthGuard } from '@nestjs/passport';
@@ -19,14 +19,23 @@ import { sendMessageAi } from './dto/send-message.dto';
 import { CloudinaryProvider } from './providers/cloudinary.provider';
 import { FileInterceptor } from '@nestjs/platform-express';
 
-import { ApiTags, ApiOperation, ApiResponse, ApiConsumes, ApiBody } from '@nestjs/swagger';
-import { Observable } from 'rxjs';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiConsumes,
+  ApiBody,
+} from '@nestjs/swagger';
+import type { Response } from 'express';
 
 @ApiTags('ai')
 @Controller('ai')
 @UseGuards(AuthGuard('jwt'))
 export class AiController {
-  constructor(private readonly aiService: AiService, private readonly cloudinaryProvider: CloudinaryProvider) { }
+  constructor(
+    private readonly aiService: AiService,
+    private readonly cloudinaryProvider: CloudinaryProvider,
+  ) { }
 
   @ApiOperation({ summary: 'Create new chat session' })
   @ApiResponse({ status: 201, description: 'Session created' })
@@ -35,26 +44,37 @@ export class AiController {
     return this.aiService.createSession(req.user.id, dto.mode);
   }
 
-  @ApiOperation({ summary: 'Send message to AI' })
-  @ApiResponse({ status: 200, description: 'AI response with history' })
-  @Sse('message')
-  async sendMessageStream(@Request() req, @Body() dto: sendMessageAi): Promise<Observable<MessageEvent>> {
-    const stream = await this.aiService.sendMessageStream(req.user.id, dto.sessionId, dto.userText, dto.imageUrl)
-    return new Observable((observer) => {
-      (async () => {
-        try {
-          for await (const chunk of stream) {
-            const content = chunk.choices[0]?.delta?.content || '';
-            if (content) {
-              observer.next({ data: { content } } as MessageEvent);
-            }
-          }
-          observer.complete();
-        } catch (e) {
-          observer.error(e);
+  @ApiOperation({ summary: 'Send message to AI with streaming' })
+  @Post('message')
+  async sendMessageStream(
+    @Request() req,
+    @Body() dto: sendMessageAi,
+    @Res() res: Response,
+  ) {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    try {
+      const stream = await this.aiService.sendMessageStream(
+        req.user.id,
+        dto.sessionId,
+        dto.userText,
+        dto.imageUrl,
+      );
+
+      for await (const chunk of stream) {
+        const content = chunk.choices[0]?.delta?.content || '';
+        if (content) {
+          res.write(`data: ${JSON.stringify({ content })}\n\n`);
         }
-      })();
-    });
+      }
+    } catch (e) {
+      console.error('Streaming error details:', e);
+      res.write(`data: ${JSON.stringify({ error: 'Stream failed', details: e.message || String(e) })}\n\n`);
+    } finally {
+      res.end();
+    }
   }
 
   @ApiOperation({ summary: 'Upload image for vision analysis' })
@@ -70,8 +90,12 @@ export class AiController {
       },
     },
   })
-  @ApiResponse({ status: 201, description: 'Image uploaded', schema: { example: { imageUrl: 'url' } } })
-  @Post("upload")
+  @ApiResponse({
+    status: 201,
+    description: 'Image uploaded',
+    schema: { example: { imageUrl: 'url' } },
+  })
+  @Post('upload')
   @UseInterceptors(FileInterceptor('file'))
   async uploadImage(@UploadedFile() file: Express.Multer.File) {
     const url = await this.cloudinaryProvider.uploadFile(file);
@@ -100,7 +124,9 @@ export class AiController {
   }
 
   @ApiOperation({ summary: 'Rename channel/session' })
-  @ApiBody({ schema: { type: 'object', properties: { title: { type: 'string' } } } })
+  @ApiBody({
+    schema: { type: 'object', properties: { title: { type: 'string' } } },
+  })
   @ApiResponse({ status: 200, description: 'Session renamed' })
   @Patch('session/:id')
   editSessionName(

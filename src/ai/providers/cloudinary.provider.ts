@@ -13,6 +13,9 @@ export class CloudinaryProvider {
   }
 
   uploadFile(file: Express.Multer.File): Promise<string> {
+    if (!file || !file.buffer) {
+      throw new Error('No file provided for upload');
+    }
     return new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         { folder: 'wis-chat' },

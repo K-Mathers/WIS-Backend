@@ -11,6 +11,7 @@ import {
   UseInterceptors,
   UploadedFile,
   Res,
+  BadRequestException,
 } from '@nestjs/common';
 import { AiService } from './ai.service';
 import { AuthGuard } from '@nestjs/passport';
@@ -98,8 +99,15 @@ export class AiController {
   @Post('upload')
   @UseInterceptors(FileInterceptor('file'))
   async uploadImage(@UploadedFile() file: Express.Multer.File) {
-    const url = await this.cloudinaryProvider.uploadFile(file);
-    return { imageUrl: url };
+    if (!file) {
+      throw new BadRequestException('File is required (use form-data with key "file")');
+    }
+    try {
+      const url = await this.cloudinaryProvider.uploadFile(file);
+      return { imageUrl: url };
+    } catch (error) {
+      throw new BadRequestException(error.message || 'Image upload failed');
+    }
   }
 
   @ApiOperation({ summary: 'Get all user sessions' })

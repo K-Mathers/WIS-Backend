@@ -88,38 +88,52 @@ export class AiService {
 
     const history = await this.loadHistory(sessionId, 10);
 
+    let imageCount = 0;
     const normalizedMessages = history.reduce((acc, m) => {
       const role = m.role === ChatRole.USER ? 'user' : 'assistant';
-      const content = m.content || '';
+      const hasImage = !!m.imageUrl;
+      const canAddImage = hasImage && imageCount < 6;
+      if (canAddImage) imageCount++;
+
       const lastMsg = acc[acc.length - 1];
 
       if (lastMsg && lastMsg.role === role) {
         if (typeof lastMsg.content === 'string') {
-          lastMsg.content += `\n\n${content}`;
+          lastMsg.content += `\n\n${m.content || ''}`;
         } else if (Array.isArray(lastMsg.content)) {
-          lastMsg.content.push({ type: 'text', text: content });
+          lastMsg.content.push({ type: 'text', text: m.content || '' });
         }
-        if (m.imageUrl && Array.isArray(lastMsg.content)) {
+
+        if (canAddImage && Array.isArray(lastMsg.content)) {
           lastMsg.content.push({ type: 'image_url', image_url: { url: m.imageUrl } });
         }
       } else {
-        if (m.imageUrl) {
+        if (canAddImage) {
           acc.push({
             role,
             content: [
-              { type: 'text', text: content || 'Image context' },
+              { type: 'text', text: m.content || 'Image context' },
               { type: 'image_url', image_url: { url: m.imageUrl } },
             ],
           });
         } else {
-          acc.push({ role, content });
+          acc.push({ role, content: m.content || '' });
         }
       }
       return acc;
     }, [] as any[]);
 
     const systemPrompt = await this.promptGpt.buildSystemPrompt(session.mode);
-    const stream = await this.openRouter.askAiStream(systemPrompt, normalizedMessages);
+    const needVision = normalizedMessages.some((m) => Array.isArray(m.content));
+    const modelToUse = needVision
+      ? process.env.OPENROUTER_VISION_MODEL
+      : undefined;
+
+    const stream = await this.openRouter.askAiStream(
+      systemPrompt,
+      normalizedMessages,
+      modelToUse
+    );
 
     const service = this;
     async function* streamInterceptor() {

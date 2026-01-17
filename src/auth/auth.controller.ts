@@ -11,7 +11,7 @@ import {
 import { AuthService } from './auth.service';
 import { CreateUserDto } from 'src/users/dto/create-user.dto';
 import { AuthGuard } from '@nestjs/passport';
-import { ResetPasswordDto } from './dto/auth-user.dto';
+import { ResetPasswordDto, ChangePasswordDto } from './dto/auth-user.dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 
 @ApiTags('auth')
@@ -28,7 +28,18 @@ export class AuthController {
     return {
       id: user.id,
       email: user.email,
+      role: user.role,
+      createdAt: user.createdAt,
+      isVerified: user.isVerified,
     };
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Change password' })
+  @ApiResponse({ status: 200, description: 'Password changed' })
+  @Post('change-password')
+  async changePassword(@Request() req, @Body() dto: ChangePasswordDto) {
+    return this.authService.changePassword(req.user.id, dto);
   }
 
   @ApiOperation({ summary: 'Register new user' })

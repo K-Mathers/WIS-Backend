@@ -15,7 +15,7 @@ import { MailService } from 'src/mail/mail.service';
     JwtModule.registerAsync({
       useFactory: async () => ({
         secret: process.env.JWT_SECRET || 'jwt-secret',
-        signOptions: { expiresIn: '1d' },
+        signOptions: { expiresIn: '14d' },
       }),
     }),
     UsersModule,
@@ -23,4 +23,4 @@ import { MailService } from 'src/mail/mail.service';
     MailModule,
   ],
 })
-export class AuthModule { }
+export class AuthModule {}

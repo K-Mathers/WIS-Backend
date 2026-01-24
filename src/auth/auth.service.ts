@@ -56,7 +56,7 @@ export class AuthService {
     const isPassword = await bcrypt.compare(password, findUser.password);
     if (!isPassword) throw new BadRequestException('Invalid password');
 
-    const payload = { email: findUser.email, sub: findUser.id };
+    const payload = { email: findUser.email, sub: findUser.id, role: findUser.role };
     const token = this.jwtService.sign(payload);
     return {
       message: 'User is sign-in',

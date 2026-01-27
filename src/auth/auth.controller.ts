@@ -132,6 +132,34 @@ export class AuthController {
     const result = await this.authService.socialLogin(email, googleId);
 
     res.cookie('token', result.token, { httpOnly: true });
-    res.redirect('http://localhost:3000/profile');
+    res.redirect('http://localhost:5173/profile');
+  }
+
+  @Get('github')
+  @UseGuards(AuthGuard('github'))
+  githubLogin() {}
+
+  @Get('github/callback')
+  @UseGuards(AuthGuard('github'))
+  async githubCallback(@Req() req, @Res() res) {
+    const { email, githubId } = req.user;
+    const result = await this.authService.socialLogin(email, githubId);
+
+    res.cookie('token', result.token, { httpOnly: true });
+    res.redirect('http://localhost:5173/profile');
+  }
+
+  @Get('discord')
+  @UseGuards(AuthGuard('discord'))
+  discrodLogin() {}
+
+  @Get('discord/callback')
+  @UseGuards(AuthGuard('discord'))
+  async discordCallback(@Req() req, @Res() res) {
+    const { email, discordId } = req.user;
+    const result = await this.authService.socialLogin(email, discordId);
+
+    res.cookie('token', result.token, { httpOnly: true });
+    res.redirect('http://localhost:5173/profile');
   }
 }

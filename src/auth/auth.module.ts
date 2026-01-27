@@ -10,10 +10,19 @@ import { MailService } from 'src/mail/mail.service';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule } from '@nestjs/config';
+import { GithubStrategy } from './strategies/github.strategy';
+import { DiscordStrategy } from './strategies/discord.strategy';
 
 @Module({
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, MailService, GoogleStrategy],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    MailService,
+    GoogleStrategy,
+    GithubStrategy,
+    DiscordStrategy,
+  ],
   imports: [
     ConfigModule,
     PassportModule,
@@ -28,4 +37,4 @@ import { ConfigModule } from '@nestjs/config';
     MailModule,
   ],
 })
-export class AuthModule { }
+export class AuthModule {}

@@ -29,19 +29,27 @@ export class SupportGateway implements OnGatewayConnection {
 
   async handleConnection(client: Socket) {
     try {
-      const token =
+      let token =
         client.handshake.auth.token || client.handshake.headers.authorization;
 
-      if (!token) {
+      if (!token && client.handshake.headers.cookie) {
+        const cookies = client.handshake.headers.cookie.split(';');
+        const tokenCookie = cookies.find((c) => c.trim().startsWith('token='));
+        if (tokenCookie) {
+          token = tokenCookie.split('=')[1];
+        }
+      }
+
+      if (!token || token === 'Bearer null') {
         client.disconnect();
         return;
       }
 
       const cleanToken = token.replace('Bearer ', '');
       const payload = this.jwtService.verify(cleanToken);
+
       client.data.user = { id: payload.sub, role: payload.role };
     } catch (e) {
-      console.log(e.message);
       client.disconnect();
     }
   }
@@ -66,6 +74,13 @@ export class SupportGateway implements OnGatewayConnection {
   ) {
     const roomName = `support:${payload.chatId}`;
     await client.join(roomName);
+
+    const history = await this.supportService.getMessages(payload.chatId);
+    client.emit('message_history', {
+      chatId: payload.chatId,
+      messages: history,
+    });
+
     client.emit('joined_room', { chatId: payload.chatId });
   }
 

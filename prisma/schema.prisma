@@ -7,6 +7,13 @@ datasource db {
   provider = "postgresql"
 }
 
+enum AuthProvider {
+  LOCAL
+  GOOGLE
+  GITHUB
+  DISCORD
+}
+
 enum Role {
   ADMIN
   USER
@@ -52,7 +59,7 @@ enum StatusChat {
 model User {
   id                 String              @id @default(uuid())
   email              String              @unique
-  password           String
+  password           String?
   isVerified         Boolean             @default(false)
   role               Role                @default(USER)
   createdAt          DateTime            @default(now())
@@ -61,6 +68,11 @@ model User {
   chatSession         ChatSession[]
   articles            Article[]
   supportChats        SupportChat[]
+  googleId            String? @unique
+  githubId            String? @unique
+  discordId           String? @unique
+
+  provider            AuthProvider @default(LOCAL)
 }
 
 model PasswordResetToken {

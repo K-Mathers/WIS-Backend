@@ -13,7 +13,7 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private mailService: MailService,
-  ) { }
+  ) {}
 
   async registration(userDto: CreateUserDto) {
     const { email, password, confirmPassword } = userDto;
@@ -53,10 +53,18 @@ export class AuthService {
     const findUser = await this.prisma.user.findUnique({ where: { email } });
     if (!findUser) throw new BadRequestException('User not found');
 
+    if (!findUser.password) {
+      throw new BadRequestException('This account used social login.');
+    }
+
     const isPassword = await bcrypt.compare(password, findUser.password);
     if (!isPassword) throw new BadRequestException('Invalid password');
 
-    const payload = { email: findUser.email, sub: findUser.id, role: findUser.role };
+    const payload = {
+      email: findUser.email,
+      sub: findUser.id,
+      role: findUser.role,
+    };
     const token = this.jwtService.sign(payload);
     return {
       message: 'User is sign-in',
@@ -69,7 +77,6 @@ export class AuthService {
     };
   }
 
-
   async createToken(user: { id: number; email: string }) {
     const payload = { id: user.id, email: user.email };
     return this.jwtService.sign(payload);
@@ -79,8 +86,18 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new BadRequestException('User not found');
 
-    const isPasswordValid = await bcrypt.compare(dto.currentPassword, user.password);
-    if (!isPasswordValid) throw new BadRequestException('Invalid current password');
+    if (!user.password) {
+      throw new BadRequestException(
+        'Current password not set for this account.',
+      );
+    }
+
+    const isPasswordValid = await bcrypt.compare(
+      dto.currentPassword,
+      user.password,
+    );
+    if (!isPasswordValid)
+      throw new BadRequestException('Invalid current password');
 
     const hashedPassword = await bcrypt.hash(dto.newPassword, 10);
     await this.prisma.user.update({
@@ -186,5 +203,58 @@ export class AuthService {
     });
 
     return { message: 'Code verified' };
+  }
+
+  async socialLogin(email: string, googleId: string) {
+    let existingUser = await this.prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (existingUser) {
+      if (!existingUser.googleId) {
+        existingUser = await this.prisma.user.update({
+          where: { id: existingUser.id },
+          data: { googleId, isVerified: true },
+        });
+      }
+      const payload = {
+        sub: existingUser.id,
+        email: existingUser.email,
+        role: existingUser.role,
+      };
+
+      return {
+        token: this.jwtService.sign(payload),
+        existingUser: {
+          id: existingUser.id,
+          email: existingUser.email,
+          isVerified: existingUser.isVerified,
+        },
+      };
+    }
+
+    existingUser = await this.prisma.user.create({
+      data: {
+        email,
+        googleId,
+        isVerified: true,
+        provider: 'GOOGLE',
+      },
+    });
+
+    const payload = {
+      sub: existingUser.id,
+      email: existingUser.email,
+      role: existingUser.role,
+    };
+    
+    return {
+      token: this.jwtService.sign(payload),
+      existingUser: {
+        id: existingUser.id,
+        email: existingUser.email,
+        isVerified: existingUser.isVerified,
+      },
+    };
   }
 }

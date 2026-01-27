@@ -13,20 +13,19 @@ import { Role } from '@prisma/client';
 
 @WebSocketGateway({
   cors: {
-    origin: 'http://localhost:3000/',
-    credentials: true
+    origin: 'http://localhost:5173',
+    credentials: true,
   },
   namespace: 'support',
 })
-export class SupportGateway
-  implements OnGatewayConnection {
+export class SupportGateway implements OnGatewayConnection {
   @WebSocketServer()
   server: Server;
 
   constructor(
     private readonly supportService: SupportService,
     private readonly jwtService: JwtService,
-  ) { }
+  ) {}
 
   async handleConnection(client: Socket) {
     try {
@@ -75,7 +74,6 @@ export class SupportGateway
     @ConnectedSocket() client: Socket,
     @MessageBody() payload: { content: string; chatId?: string },
   ) {
-    { }
     if (!payload.content || payload.content.trim() === '') {
       console.log('Blocked empty message');
       return;

@@ -7,11 +7,16 @@ import { UsersModule } from 'src/users/users.module';
 import { PrismaModule } from 'prisma/prisma.module';
 import { MailModule } from 'src/mail/mail.module';
 import { MailService } from 'src/mail/mail.service';
+import { GoogleStrategy } from './strategies/google.strategy';
+import { PassportModule } from '@nestjs/passport';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, MailService],
+  providers: [AuthService, JwtStrategy, MailService, GoogleStrategy],
   imports: [
+    ConfigModule,
+    PassportModule,
     JwtModule.registerAsync({
       useFactory: async () => ({
         secret: process.env.JWT_SECRET || 'jwt-secret',
@@ -23,4 +28,4 @@ import { MailService } from 'src/mail/mail.service';
     MailModule,
   ],
 })
-export class AuthModule {}
+export class AuthModule { }

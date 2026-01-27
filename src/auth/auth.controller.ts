@@ -4,6 +4,7 @@ import {
   Controller,
   Get,
   Post,
+  Req,
   Request,
   Res,
   UseGuards,
@@ -17,7 +18,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) { }
+  constructor(private readonly authService: AuthService) {}
 
   @UseGuards(AuthGuard('jwt'))
   @ApiOperation({ summary: 'Get current user profile' })
@@ -71,7 +72,12 @@ export class AuthController {
   }
 
   @ApiOperation({ summary: 'Request password reset' })
-  @ApiBody({ schema: { type: 'object', properties: { email: { type: 'string', example: 'user@example.com' } } } })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { email: { type: 'string', example: 'user@example.com' } },
+    },
+  })
   @Post('forgot-password')
   async forgotPass(@Body('email') email: string) {
     return this.authService.forgotPass(email);
@@ -89,16 +95,43 @@ export class AuthController {
   }
 
   @ApiOperation({ summary: 'Send verification code' })
-  @ApiBody({ schema: { type: 'object', properties: { email: { type: 'string', example: 'user@example.com' } } } })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { email: { type: 'string', example: 'user@example.com' } },
+    },
+  })
   @Post('send-code')
   async sendCode(@Body('email') email: string) {
     return this.authService.sendEmailCode(email, 'VERIFY_EMAIL');
   }
 
   @ApiOperation({ summary: 'Verify code' })
-  @ApiBody({ schema: { type: 'object', properties: { email: { type: 'string', example: 'user@example.com' }, code: { type: 'string', example: '123456' } } } })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        email: { type: 'string', example: 'user@example.com' },
+        code: { type: 'string', example: '123456' },
+      },
+    },
+  })
   @Post('verify-code')
   async verifyCode(@Body('email') email: string, @Body('code') code: string) {
     return this.authService.verifyEmailCode(email, code, 'VERIFY_EMAIL');
+  }
+
+  @Get('google')
+  @UseGuards(AuthGuard('google'))
+  googleLogin() {}
+
+  @Get('google/callback')
+  @UseGuards(AuthGuard('google'))
+  async googleCallback(@Req() req, @Res() res) {
+    const { email, googleId } = req.user;
+    const result = await this.authService.socialLogin(email, googleId);
+
+    res.cookie('token', result.token, { httpOnly: true });
+    res.redirect('http://localhost:3000/profile');
   }
 }

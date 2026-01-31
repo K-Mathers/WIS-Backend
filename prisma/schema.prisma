@@ -56,6 +56,12 @@ enum StatusChat {
   CLOSED
 }
 
+enum MissionStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
 model User {
   id                 String              @id @default(uuid())
   email              String              @unique
@@ -159,4 +165,12 @@ model SupportMessage{
   senderRole Role
   content   String
   createdAt DateTime    @default(now())
+}
+
+model Mission {
+  id        String        @id @default(uuid())
+  title     String
+  status    MissionStatus @default(TODO)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
 }

@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'prisma/prisma.service';
 import { CreateArticleDto } from './dto/create-article.dto';
-import { ArticleCategory, ArticleStatus } from '@prisma/client';
+import { ArticleCategory, ArticleStatus, ReactionType } from '@prisma/client';
 import { ArticleQueryDto } from './dto/article-query.dto';
 
 @Injectable()
@@ -142,7 +142,9 @@ export class BlogService {
   }
 
   async moderate(articleId: string, decision: 'APPROVE' | 'REJECT') {
-    const article = await this.prisma.article.findUnique({ where: { id: articleId } });
+    const article = await this.prisma.article.findUnique({
+      where: { id: articleId },
+    });
     if (!article) throw new NotFoundException('Article not found');
 
     const newData: any = {};
@@ -167,17 +169,90 @@ export class BlogService {
       orderBy: { createdAt: 'desc' },
       include: {
         author: {
-          select: { id: true, email: true }
-        }
-      }
+          select: { id: true, email: true },
+        },
+      },
     });
   }
 
   async deleteArticleById(articleId: string) {
-    return this.prisma.article.delete({ where: { id: articleId } })
+    return this.prisma.article.delete({ where: { id: articleId } });
   }
 
   async getMyArticles(userId: string) {
-    return this.prisma.article.findMany({ where: { authorId: userId } })
+    return this.prisma.article.findMany({ where: { authorId: userId } });
+  }
+
+  async createComment(userId, dto) {
+    return this.prisma.comment.create({
+      data: {
+        content: dto.content,
+        articleId: dto.articleId,
+        userId,
+      },
+    });
+  }
+
+  async reactToComment(userId: string, commentId: string, type: ReactionType) {
+    const exit = await this.prisma.commentReaction.findUnique({
+      where: {
+        userId_commentId: { userId, commentId },
+      },
+    });
+
+    if (exit) {
+      if (exit.type === type) {
+        await this.prisma.commentReaction.delete({
+          where: { id: exit.id },
+        });
+        return;
+      }
+
+      return this.prisma.commentReaction.update({
+        where: { id: exit.id },
+        data: { type },
+      });
+    }
+
+    return this.prisma.commentReaction.create({
+      data: {
+        userId,
+        commentId,
+        type,
+      },
+    });
+  }
+
+  async getArticleComments(articleId: string, currentUserId?: string) {
+    const comments = await this.prisma.comment.findMany({
+      where: { articleId },
+      include: {
+        user: { select: { id: true, email: true } },
+        reaction: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return comments.map((el) => ({
+      id: el.id,
+      content: el.content,
+      author: el.user,
+      likes: el.reaction.filter((r) => r.type === 'LIKE').length,
+      dislikes: el.reaction.filter((r) => r.type === 'DISLIKE').length,
+      myReaction:
+        el.reaction.find((r) => r.userId === currentUserId)?.type ?? null,
+      createdAt: el.createdAt,
+    }));
+  }
+  async getMyComments(userId: string) {
+    return this.prisma.comment.findMany({
+      where: { userId },
+      include: {
+        article: {
+          select: { id: true, title: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 }

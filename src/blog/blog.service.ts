@@ -69,6 +69,7 @@ export class BlogService {
           id: true,
           title: true,
           slug: true,
+          content: true,
           shortDescription: true,
           coverImage: true,
           category: true,

@@ -8,5 +8,6 @@ import { CloudinaryProvider } from './providers/cloudinary.provider';
 @Module({
   controllers: [AiController],
   providers: [AiService, OpenRouterProvider, PromptGpt, CloudinaryProvider],
+  exports: [CloudinaryProvider],
 })
 export class AiModule { }

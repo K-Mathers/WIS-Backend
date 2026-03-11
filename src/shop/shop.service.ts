@@ -45,7 +45,13 @@ export class ShopService {
                 })),
             });
 
-            return product;
+            return tx.productColorway.findUnique({
+                where: { id: newColorway.id },
+                include: {
+                    product: { select: { name: true, slug: true, gender: true } },
+                    skus: { select: { size: true, stock: true } },
+                },
+            });
         });
     }
 

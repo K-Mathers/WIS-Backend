@@ -98,9 +98,38 @@ export class ShopService {
         const [items, total] = await Promise.all([
             this.prisma.productColorway.findMany({
                 where: whereOptions,
-                include: {
-                    product: { select: { name: true, slug: true, gender: true } },
-                    skus: { select: { size: true, stock: true } }
+                select: {
+                    id: true,
+                    color: true,
+                    hexCode: true,
+                    price: true,
+                    originalPrice: true,
+                    images: true,
+                    discountPercent: true,
+                    product: {
+                        select: {
+                            id: true,
+                            name: true,
+                            description: true,
+                            slug: true,
+                            gender: true,
+                            categoryId: true,
+                            category: {
+                                select: {
+                                    id: true,
+                                    name: true,
+                                    slug: true
+                                }
+                            }
+                        }
+                    },
+
+                    skus: {
+                        select: {
+                            size: true,
+                            stock: true
+                        }
+                    }
                 },
                 orderBy,
                 skip,
@@ -109,8 +138,29 @@ export class ShopService {
             this.prisma.productColorway.count({ where: whereOptions })
         ]);
 
+
+        const formattedItems = items.map(item => ({
+            id: item.product.id,
+            name: item.product.name,
+            description: item.product.description,
+            slug: item.product.slug,
+            gender: item.product.gender,
+            categoryId: item.product.categoryId,
+            category: item.product.category,
+            colorway: {
+                id: item.id,
+                colorName: item.color,
+                hexCode: item.hexCode,
+                price: item.price,
+                originalPrice: item.originalPrice,
+                discountPercent: item.discountPercent,
+                images: item.images,
+                skus: item.skus
+            }
+        }));
+
         return {
-            data: items,
+            data: formattedItems,
             meta: {
                 total,
                 page,
@@ -134,5 +184,12 @@ export class ShopService {
 
         if (!product) throw new NotFoundException('Product not found');
         return product;
+    }
+
+    async deleteProduct(productId: string) {
+        const product = await this.prisma.product.findUnique({ where: { id: productId } })
+        if (!product) throw new NotFoundException('Product not found');
+
+        return this.prisma.product.delete({ where: { id: productId } });
     }
 }

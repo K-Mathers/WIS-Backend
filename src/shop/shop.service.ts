@@ -1,4 +1,8 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+    Injectable,
+    BadRequestException,
+    NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from 'prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { ProductQueryDto } from './dto/product-query.dto';
@@ -18,45 +22,48 @@ export class ShopService {
         const existing = await this.prisma.product.findUnique({ where: { slug } });
         if (existing) throw new BadRequestException('Product already exists');
 
-        return this.prisma.$transaction(async (tx) => {
-            const product = await tx.product.create({
-                data: {
-                    ...productData,
-                    slug,
+        return await this.prisma.productColorway.create({
+            data: {
+                color: colorway.colorName,
+                hexCode: colorway.hexCode,
+                price: colorway.price,
+                originalPrice: colorway.originalPrice,
+                images: colorway.images,
+                product: {
+                    create: {
+                        ...productData,
+                        slug,
+                    },
                 },
-            });
-
-            const newColorway = await tx.productColorway.create({
-                data: {
-                    productId: product.id,
-                    color: colorway.colorName,
-                    hexCode: colorway.hexCode,
-                    price: colorway.price,
-                    originalPrice: colorway.originalPrice,
-                    images: colorway.images,
+                skus: {
+                    createMany: {
+                        data: colorway.skus.map((sku) => ({
+                            size: sku.size,
+                            stock: sku.stock,
+                        })),
+                    },
                 },
-            });
-
-            await tx.productSku.createMany({
-                data: colorway.skus.map((sku) => ({
-                    colorwayId: newColorway.id,
-                    size: sku.size,
-                    stock: sku.stock,
-                })),
-            });
-
-            return tx.productColorway.findUnique({
-                where: { id: newColorway.id },
-                include: {
-                    product: { select: { name: true, slug: true, gender: true } },
-                    skus: { select: { size: true, stock: true } },
-                },
-            });
+            },
+            include: {
+                product: { select: { name: true, slug: true, gender: true } },
+                skus: { select: { size: true, stock: true } },
+            },
         });
     }
 
     async getCatalog(query: ProductQueryDto) {
-        const { q, gender, minPrice, maxPrice, colors, sizes, onSale, sortBy, page = 1, limit = 20 } = query;
+        const {
+            q,
+            gender,
+            minPrice,
+            maxPrice,
+            colors,
+            sizes,
+            onSale,
+            sortBy,
+            page = 1,
+            limit = 20,
+        } = query;
 
         const whereOptions: Prisma.ProductColorwayWhereInput = {};
 
@@ -66,8 +73,8 @@ export class ShopService {
 
         if (gender) {
             whereOptions.product = {
-                ...(whereOptions.product as any || {}),
-                gender
+                ...((whereOptions.product as any) || {}),
+                gender,
             };
         }
 
@@ -90,7 +97,9 @@ export class ShopService {
             whereOptions.skus = { some: { size: { in: sizes }, stock: { gt: 0 } } };
         }
 
-        let orderBy: Prisma.ProductColorwayOrderByWithRelationInput = { product: { createdAt: 'desc' } };
+        let orderBy: Prisma.ProductColorwayOrderByWithRelationInput = {
+            product: { createdAt: 'desc' },
+        };
         if (sortBy === 'price_asc') orderBy = { price: 'asc' };
         if (sortBy === 'price_desc') orderBy = { price: 'desc' };
 
@@ -176,10 +185,10 @@ export class ShopService {
             include: {
                 category: true,
                 colorways: {
-                    include: { skus: true }
+                    include: { skus: true },
                 },
                 reviews: true,
-            }
+            },
         });
 
         if (!product) throw new NotFoundException('Product not found');
